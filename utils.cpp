@@ -1,12 +1,11 @@
 #include "utils.h"
 
-void runGUI(float* alpha, float* beta, bool* exit){
+void runGUI(float* alpha, bool* exit) {
     char buffer[20]="0.995";
     char buffer2[20]="0.1";
     Fl_Window* w = new Fl_Window(1800, 100, 330, 190, "Uruk - NSPLab");
     Fl_Button ok(110, 130, 100, 35, "Update");
     Fl_Input input(60, 40, 250, 25,"Alpha:");
-    Fl_Input input2(60, 70, 250, 25,"Beta:");
     input.value(buffer);
     input2.value(buffer2);
     w->end();
@@ -21,33 +20,18 @@ void runGUI(float* alpha, float* beta, bool* exit){
         if (o == &ok) {
             strcpy(buffer, input.value());
             (*alpha) = ::atof(buffer);
-            strcpy(buffer2, input2.value());
-            (*beta) = ::atof(buffer2);
         }
       }
     }
 }
 
-void fill_circle(SDL_Surface *surface, int cx, int cy, int radius, Uint32 pixel)
-{
-    // Note that there is more to altering the bitrate of this
-    // method than just changing this value.  See how pixels are
-    // altered at the following web page for tips:
-    //   http://www.libsdl.org/intro.en/usingvideo.html
+void fill_circle(SDL_Surface *surface, int cx, int cy, int radius, Uint32 pixel) {
     static const int BPP = 4;
 
     double r = (double)radius;
 
     for (double dy = 1; dy <= r; dy += 1.0)
     {
-        // This loop is unrolled a bit, only iterating through half of the
-        // height of the circle.  The result is used to draw a scan line and
-        // its mirror image below it.
-
-        // The following formula has been simplified from our original.  We
-        // are using half of the width of the circle because we are provided
-        // with a center and we need left/right coordinates.
-
         double dx = floor(sqrt((2.0 * r * dy) - (dy * dy)));
         int x = cx - dx;
 
@@ -63,4 +47,37 @@ void fill_circle(SDL_Surface *surface, int cx, int cy, int radius, Uint32 pixel)
             target_pixel_b += BPP;
         }
     }
+}
+
+void DrawGraphics(SDL_Surface *screen, bool gostate, SDL_Rect* redRect) {
+    SDL_FillRect(screen , NULL , 0x221122);
+    SDL_Rect workRect;
+    workRect.y = 90;
+    workRect.x = 365;
+    workRect.w = 70;
+    workRect.h = 310;
+
+    SDL_Rect workRect2;
+    workRect2.y = 95;
+    workRect2.x = 370;
+    workRect2.w = 60;
+    workRect2.h = 300;
+
+    SDL_Rect hRect;
+    hRect.y = 245;
+    hRect.x = 350;
+    hRect.w = 100;
+    hRect.h = 2;
+
+    SDL_FillRect(screen , &workRect , SDL_MapRGB(screen->format , 200 , 200 , 200 ) );
+    SDL_FillRect(screen , &workRect2 , SDL_MapRGB(screen->format , 34 , 17 , 34 ) );
+    SDL_FillRect(screen , &hRect , SDL_MapRGB(screen->format , 34 , 100 , 34 ) );
+    SDL_FillRect(screen , redRect , SDL_MapRGB(screen->format , 200 , 20 , 200 ) );
+
+    if (gostate) {
+        fill_circle(screen, 50,50, 10, 0xffff0000);
+    } else {
+        fill_circle(screen, 50,50, 10, 0xff00ff00);
+    }
+    SDL_Flip(screen);
 }

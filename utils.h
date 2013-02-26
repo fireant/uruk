@@ -8,5 +8,6 @@ class Fl_Widget;
 void close_cb(Fl_Widget* , void* param);
 void runGUI(float* alpha, float* beta, bool* exit);
 void fill_circle(SDL_Surface *surface, int cx, int cy, int radius, Uint32 pixel);
+void DrawGraphics(SDL_Surface *screen, bool gostate, SDL_Rect* redRect);
 
 #endif // UTILS_H
