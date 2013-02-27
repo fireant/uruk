@@ -126,17 +126,18 @@ int main()
         // large laplacian filter of C4
         cb_eeg_right.put(channels[32] - 0.25 * (channels[30]+channels[14]+channels[34]+channels[50]) );
 
-        // every 13 cycles ~ 50 ms compute spectrum
+        // every 13 cycles ~ 50 ms (= 13/256Hz) compute spectrum
         counter += 1;
         if (counter == 13) {
             counter = 0;
 
+            // get values circular buffers in vectors
             Vec<double> left_signal;
             Vec<double> right_signal;
-
             cb_eeg_left.peek(left_signal);
             cb_eeg_right.peek(right_signal);
 
+            // compute spectrum of signals, 256 Hz sampling rate
             vec left_spd = spectrum(left_signal, 256.0);
             vec right_spd = spectrum(right_signal, 256.0);
 
@@ -160,17 +161,16 @@ int main()
             for (size_t i=8; i<=12; i++) {
                 left_mu_power += left_spd(i)/5.0;
                 right_mu_power += right_spd(i)/5.0;
-
-                left_av_mu_power = (alpha) * left_av_mu_power + (1.0 - alpha) * left_mu_power;
-                right_av_mu_power = (alpha) * right_av_mu_power + (1.0 - alpha) * right_mu_power;
             }
+            left_av_mu_power = (alpha) * left_av_mu_power + (1.0 - alpha) * left_mu_power;
+            right_av_mu_power = (alpha) * right_av_mu_power + (1.0 - alpha) * right_mu_power;
+
             for (size_t i=18; i<=26; i++) {
                 left_beta_power += left_spd(i)/5.0;
                 right_beta_power += right_spd(i)/5.0;
-
-                left_av_beta_power = (alpha) * left_av_beta_power + (1.0 - alpha) * left_beta_power;
-                right_av_beta_power = (alpha) * right_av_beta_power + (1.0 - alpha) * right_beta_power;
             }
+            left_av_beta_power = (alpha) * left_av_beta_power + (1.0 - alpha) * left_beta_power;
+            right_av_beta_power = (alpha) * right_av_beta_power + (1.0 - alpha) * right_beta_power;
 
             cb_power.put(right_av_mu_power);
 
