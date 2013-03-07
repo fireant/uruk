@@ -10,12 +10,6 @@
 #include <itpp/base/circular_buffer.h>
 #include <itpp/stat/misc_stat.h>
 
-#include <Fl/Fl.H>
-#include <Fl/Fl_Window.H>
-#include <FL/Fl_Button.H>
-#include <FL/Fl_Input.H>
-#include <FL/Fl_Output.H>
-
 #include <SDL/SDL.h>
 
 #include "utils.h"
@@ -48,7 +42,7 @@ int main()
     // title of window
     SDL_WM_SetCaption("Uruk - NSPLab", NULL);
     // create window of 800 by 480 pixels
-    SDL_Surface* screen = SDL_SetVideoMode( 800, 480, 32, SDL_DOUBLEBUF|SDL_ANYFORMAT);
+    SDL_Surface* screen = SDL_SetVideoMode( 1920, 1200, 32, SDL_DOUBLEBUF|SDL_ANYFORMAT);
     // dialog box to modify alpha
     thread gui(runGUI, &alpha, &exit);
 
@@ -92,6 +86,8 @@ int main()
     size_t wait_time = rand() % 10 + 10;
     size_t go_time = rand() % 3 + 10;
 
+    timeval t1, t2;
+    double elapsedTime;
     gettimeofday(&t1, NULL);
 
     // main loop
@@ -154,10 +150,9 @@ int main()
             r_csv<<endl;
             r_csv.flush();
 
+            // compute mean power in mu-alpha band
             float left_mu_power = 0.0f;
             float right_mu_power = 0.0f;
-            float left_beta_power = 0.0f;
-            float right_beta_power = 0.0f;
             for (size_t i=8; i<=12; i++) {
                 left_mu_power += left_spd(i)/5.0;
                 right_mu_power += right_spd(i)/5.0;
@@ -165,17 +160,21 @@ int main()
             left_av_mu_power = (alpha) * left_av_mu_power + (1.0 - alpha) * left_mu_power;
             right_av_mu_power = (alpha) * right_av_mu_power + (1.0 - alpha) * right_mu_power;
 
+            // compute mean power in mu-beta band
+            float left_beta_power = 0.0f;
+            float right_beta_power = 0.0f;
             for (size_t i=18; i<=26; i++) {
                 left_beta_power += left_spd(i)/5.0;
                 right_beta_power += right_spd(i)/5.0;
             }
+            //
             left_av_beta_power = (alpha) * left_av_beta_power + (1.0 - alpha) * left_beta_power;
             right_av_beta_power = (alpha) * right_av_beta_power + (1.0 - alpha) * right_beta_power;
 
             cb_power.put(right_av_mu_power);
 
             // update plot
-            gnuplot.plot(right_av_mu_power);
+            gnuplot.Plot(right_av_mu_power);
         }
 
         vec power_vec;

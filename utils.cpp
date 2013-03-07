@@ -1,5 +1,23 @@
 #include "utils.h"
 
+#include <Fl/Fl.H>
+#include <Fl/Fl_Window.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_Input.H>
+#include <FL/Fl_Output.H>
+
+#include <cmath>
+#include <iostream>
+
+using namespace std;
+
+//
+static void close_cb(Fl_Widget*, void *w) {
+  bool* exit = (bool*)w;
+  (*exit) = true;
+  cout<<"ecit        "<<endl;
+}
+
 void runGUI(float* alpha, bool* exit) {
     char buffer[20]="0.995";
     char buffer2[20]="0.1";
@@ -7,11 +25,10 @@ void runGUI(float* alpha, bool* exit) {
     Fl_Button ok(110, 130, 100, 35, "Update");
     Fl_Input input(60, 40, 250, 25,"Alpha:");
     input.value(buffer);
-    input2.value(buffer2);
     w->end();
     w->show();
     w->user_data(exit);
-    w->callback((Fl_Callback*)close_cb);
+    w->callback((Fl_Callback*)close_cb, exit);
 
     while (!(*exit)) {
       Fl::wait();

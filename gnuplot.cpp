@@ -7,8 +7,8 @@ GnuPlot::GnuPlot() {
                    --stream -xlen 400 --geometry 940x450-0+0", "w");
 }
 
-GnuPlot::Plot(float value) {
-    fprintf(gfeed, "%f \n", value);
-    fprintf(gfeed, "replot\n");
-    fflush(gfeed);
+void GnuPlot::Plot(float value) {
+    fprintf(gfeed_, "%f \n", value);
+    fprintf(gfeed_, "replot\n");
+    fflush(gfeed_);
 }

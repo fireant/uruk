@@ -1,5 +1,6 @@
 #include "eeg_receiver.h"
-#include <strstream>
+#include <sstream>
+#include <string>
 
 EegReceiver::EegReceiver():
     context(1), eeg_subscriber(context, ZMQ_SUB)
@@ -9,11 +10,12 @@ EegReceiver::EegReceiver():
 
 }
 
-EegReceiver::receive(float* channels) {
+void EegReceiver::receive(float* channels) {
     zmq::message_t update;
-    eeg_subscriber.recv(&update);
-    std::istringstream iss(static_cast<char*>(update.data()));
+    eeg_subscriber.recv(&update, ZMQ_NOBLOCK);
+    std::istringstream iss(static_cast< char*>(update.data()));
 
+    std::string str;
     for (int i=0; i<65; i++) {
         iss >> str;
         channels[i] = atof(str.c_str());
