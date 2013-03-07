@@ -114,6 +114,12 @@ int main()
             }
         }
 
+        if (gostate) {
+            system("echo \"1;\" > /dev/ttyACM0");
+        } else {
+            system("echo \"0;\" > /dev/ttyACM0");
+        }
+
         // receive EEG
         eeg.receive(channels);
 
