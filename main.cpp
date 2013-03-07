@@ -9,6 +9,7 @@
 #include <itpp/signal/sigfun.h>
 #include <itpp/base/circular_buffer.h>
 #include <itpp/stat/misc_stat.h>
+#include <itpp/base/random.h>
 
 #include <SDL/SDL.h>
 
@@ -79,8 +80,8 @@ int main()
     Circular_Buffer<double> cb_power(200);
 
 
-    // if true: exercise period, if false: relax period
-    bool gostate = false;
+    // target position, -1(down), 0 ,1(up)
+    int target = 0;
 
     // random length of wait rest and exercise periods
     size_t wait_time = rand() % 10 + 10;
@@ -90,6 +91,9 @@ int main()
     double elapsedTime;
     gettimeofday(&t1, NULL);
 
+    float lambda=0.1;
+    Exponential_RNG erng(lambda);
+
     // main loop
     while (!exit) {
 
@@ -98,6 +102,7 @@ int main()
         elapsedTime = (t2.tv_sec - t1.tv_sec);
 
         // check if we have to toggle mode, relax/exercise
+        // todo change this to 3 targets
         if (gostate) {
             if (elapsedTime > go_time) {
                 gostate = false;
