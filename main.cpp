@@ -10,29 +10,43 @@
 #include <itpp/base/circular_buffer.h>
 #include <itpp/stat/misc_stat.h>
 #include <itpp/base/random.h>
+#include <itpp/base/math/min_max.h>
+#include <itpp/base/vec.h>
 
 #include <SDL/SDL.h>
+
+#include <zmq.hpp>
 
 #include "utils.h"
 #include "gnuplot.h"
 #include "eeg_receiver.h"
+#include "statemachine.h"
 
 using namespace std;
 using namespace itpp;
+using namespace zmq;
 
 
 int main()
 {
+
+    // ZMQ thread pool of 3
+    context_t context(3);
+    socket_t publisher(context, ZMQ_PUB);
+    socket_t subscriber(context, ZMQ_SUB);
+    publisher.bind("ipc:///tmp/fearures.pipe");
+    subscriber.connect("ipc:///tmp/ballpos.pipe");
+
     // alpha value in first order autoregressive
-    float alpha = 0.995;
+    float alpha = 0.9995;
 
     // signals gui window to close
     bool exit = false;
 
     // the ball/cursor whose vertical position(redRect.y) is controlled by EEG
     SDL_Rect redRect;
-    redRect.x = 375;
-    redRect.y = 420;
+    redRect.x = 960;
+    redRect.y = 500;
     redRect.h = 50; // height
     redRect.w = 50; // width
 
@@ -44,6 +58,7 @@ int main()
     SDL_WM_SetCaption("Uruk - NSPLab", NULL);
     // create window of 800 by 480 pixels
     SDL_Surface* screen = SDL_SetVideoMode( 1920, 1200, 32, SDL_DOUBLEBUF|SDL_ANYFORMAT);
+    SDL_ShowCursor(SDL_DISABLE);
     // dialog box to modify alpha
     thread gui(runGUI, &alpha, &exit);
 
@@ -51,21 +66,19 @@ int main()
     EegReceiver eeg;
 
     // log files
-    ofstream l_csv("left_power_data.csv");
-    ofstream r_csv("right_power_data.csv");
+    ofstream csv("/media/ssd/uruk/data.csv");
+    //ofstream r_csv("/media/ssd/uruk/right_power_data.csv");
 
     // gnuplot window to plot live data
-    GnuPlot gnuplot;
+    //GnuPlot gnuplot;
 
 
     float channels[65];
     string str;
     size_t counter = 0;
 
-    float left_av_mu_power = 0.0;
-    float right_av_mu_power = 0.0;
-    float left_av_beta_power = 0.0;
-    float right_av_beta_power = 0.0;
+    double left_av_mu_power = 0.0;
+    double right_av_mu_power = 0.0;
 
     // circular buffers to hold filtered eeg values, last 66 values
     Circular_Buffer<double> cb_eeg_left(66);
@@ -77,7 +90,7 @@ int main()
     }
 
     // circular buffer to hold filtered power, last 200 values
-    Circular_Buffer<double> cb_power(200);
+    Circular_Buffer<double> cb_power(10);
 
 
     // target position, -1(down), 0 ,1(up)
@@ -91,47 +104,38 @@ int main()
     double elapsedTime;
     gettimeofday(&t1, NULL);
 
-    float lambda=0.1;
-    Exponential_RNG erng(lambda);
+    //*********************************************************************
+    //*********************************************************************
+    //** BASELINE
+    //*********************************************************************
+    //*********************************************************************
 
-    // main loop
-    while (!exit) {
-
-        // measure time length of current relax/exercise period
+    // record baseline and compute bounds
+    // relax time
+    sleep(5);
+    // baseline time
+    ofstream relax_csv("/media/ssd/uruk/new.csv");
+    ofstream left_relax_csv("/media/ssd/uruk/new_left.csv");
+    ofstream right_relax_csv("/media/ssd/uruk/new_right.csv");
+    Vec<double> baselineSamples;
+    Vec<double> baselineSamples_left;
+    Vec<double> baselineSamples_right;
+    bool first_iteration = true;
+    while(true){
         gettimeofday(&t2, NULL);
         elapsedTime = (t2.tv_sec - t1.tv_sec);
 
-        // check if we have to toggle mode, relax/exercise
-        // todo change this to 3 targets
-        if (gostate) {
-            if (elapsedTime > go_time) {
-                gostate = false;
-                gettimeofday(&t1, NULL);
-                // relax period of 12 to 18 seconds
-                wait_time = rand() % 6 + 12;
-            }
-        } else {
-            if (elapsedTime > wait_time) {
-                gostate = true;
-                gettimeofday(&t1, NULL);
-                // exercise period of 12 to 18 seconds
-                go_time = rand() % 6 + 12;
-            }
+        // TODO: set parameter
+        if (elapsedTime > 20.0){
+            break;
         }
 
-        if (gostate) {
-            system("echo \"1;\" > /dev/ttyACM0");
-        } else {
-            system("echo \"0;\" > /dev/ttyACM0");
-        }
-
-        // receive EEG
         eeg.receive(channels);
 
         // large laplacian filter of C3
-        cb_eeg_left.put(channels[28] - 0.25 * (channels[26]+channels[10]+channels[30]+channels[46]) );
+        cb_eeg_left.put(channels[27] - 0.25 * (channels[25]+channels[9]+channels[29]+channels[45]) );
         // large laplacian filter of C4
-        cb_eeg_right.put(channels[32] - 0.25 * (channels[30]+channels[14]+channels[34]+channels[50]) );
+        cb_eeg_right.put(channels[31] - 0.25 * (channels[29]+channels[13]+channels[33]+channels[49]) );
 
         // every 13 cycles ~ 50 ms (= 13/256Hz) compute spectrum
         counter += 1;
@@ -148,18 +152,114 @@ int main()
             vec left_spd = spectrum(left_signal, 256.0);
             vec right_spd = spectrum(right_signal, 256.0);
 
-            // TODO: write a function for this
-            l_csv<<redRect.y<<","<<gostate<<","<<left_spd(0);
-            for (size_t t=0; t<left_spd.length(); t++)
-                l_csv<<","<<left_spd(t);
-            l_csv<<endl;
-            l_csv.flush();
+            //cout<<"left_spd: "<<left_spd<<endl;
 
-            r_csv<<redRect.y<<","<<gostate<<","<<right_spd(0);
-            for (size_t t=0; t<right_spd.length(); t++)
-                r_csv<<","<<right_spd(t);
-            r_csv<<endl;
-            r_csv.flush();
+            // compute mean power in mu-alpha band
+            double left_mu_power = 0.0f;
+            double right_mu_power = 0.0f;
+            for (size_t i=8; i<=12; i++) {
+                left_mu_power += left_spd(i)/5.0;
+                right_mu_power += right_spd(i)/5.0;
+            }
+            left_av_mu_power = (alpha) * left_av_mu_power + (1.0 - alpha) * left_mu_power;
+            right_av_mu_power = (alpha) * right_av_mu_power + (1.0 - alpha) * right_mu_power;
+
+            if (first_iteration) {
+                left_av_mu_power = left_mu_power;
+                right_av_mu_power = right_mu_power;
+                first_iteration = false;
+            }
+
+            double mean_power = right_av_mu_power - left_av_mu_power;
+
+            //cout<<"mean_power: "<<mean_power<<endl;
+
+            baselineSamples = concat(baselineSamples,mean_power);
+            baselineSamples_left = concat(baselineSamples_left,left_av_mu_power);
+            baselineSamples_right = concat(baselineSamples_right,right_av_mu_power);
+        }
+    }
+
+    //relax_csv<<baselineSamples<<endl;
+    //left_relax_csv<<baselineSamples_left<<endl;
+    //right_relax_csv<<baselineSamples_right<<endl;
+
+    float mean_baseline = mean(baselineSamples);
+
+    //float max_baseline =  2.0*variance(baselineSamples) + mean_baseline;
+    //float min_baseline = -2.0*variance(baselineSamples) + mean_baseline;
+
+    float max_baseline =  max(baselineSamples);
+    float min_baseline =  min(baselineSamples);
+
+
+    cout<<"mean_baseline: "<<mean_baseline<<endl;
+    cout<<"max_baseline: "<<max_baseline<<endl;
+    cout<<"min_baseline: "<<min_baseline<<endl;
+
+    StateMachine stateMachine(0.075, 15.0, 1.0, 1275, 645);
+
+    //*********************************************************************
+    //*********************************************************************
+    //** Experiment
+    //*********************************************************************
+    //*********************************************************************
+    // main loop
+
+    timeval init_time;
+    gettimeofday(&init_time, NULL);
+
+     counter = 0;
+     while (!exit) {
+
+        // receive EEG
+        eeg.receive(channels);
+
+        // large laplacian filter of C3
+        cb_eeg_left.put(channels[27] - 0.25 * (channels[25]+channels[9]+channels[29]+channels[45]) );
+        // large laplacian filter of C4
+        cb_eeg_right.put(channels[31] - 0.25 * (channels[29]+channels[13]+channels[33]+channels[49]) );
+
+        // every 13 cycles ~ 50 ms (= 13/256Hz) compute spectrum
+        counter += 1;
+        if (counter == 13) {
+            counter = 0;
+
+            // get values circular buffers in vectors
+            Vec<double> left_signal;
+            Vec<double> right_signal;
+            cb_eeg_left.peek(left_signal);
+            cb_eeg_right.peek(right_signal);
+
+            // compute spectrum of signals, 256 Hz sampling rate
+            vec left_spd = spectrum(left_signal, 256.0);
+            vec right_spd = spectrum(right_signal, 256.0);
+
+            // publish computed powers using ZMQ
+            stringstream message;
+            for (size_t i=0; i<left_spd.size(); i++) {
+                message<<left_spd(i)<<",";
+            }
+            message<<endl;
+            zmq::message_t zmq_message(message.str().length());
+            memcpy((char *) zmq_message.data(), message.str().c_str(), message.str().length());
+            publisher.send(zmq_message);
+
+            // receive ball pos from python
+            zmq::message_t ball_msg;
+            subscriber.recv(&ball_msg);
+            // convert reveived data into c++ string/sstream
+            string feat_str(((char *)ball_msg.data()));
+            replace(feat_str.begin(), feat_str.end(), ',', ' ');
+            stringstream ss;
+            ss.str(feat_str);
+            float x=0;
+            ss>>x;
+
+
+
+
+
 
             // compute mean power in mu-alpha band
             float left_mu_power = 0.0f;
@@ -171,37 +271,60 @@ int main()
             left_av_mu_power = (alpha) * left_av_mu_power + (1.0 - alpha) * left_mu_power;
             right_av_mu_power = (alpha) * right_av_mu_power + (1.0 - alpha) * right_mu_power;
 
-            // compute mean power in mu-beta band
-            float left_beta_power = 0.0f;
-            float right_beta_power = 0.0f;
-            for (size_t i=18; i<=26; i++) {
-                left_beta_power += left_spd(i)/5.0;
-                right_beta_power += right_spd(i)/5.0;
-            }
-            //
-            left_av_beta_power = (alpha) * left_av_beta_power + (1.0 - alpha) * left_beta_power;
-            right_av_beta_power = (alpha) * right_av_beta_power + (1.0 - alpha) * right_beta_power;
-
-            cb_power.put(right_av_mu_power);
+            float mean_power = right_av_mu_power - left_av_mu_power;
+            //cb_power.put(mean_power);
 
             // update plot
-            gnuplot.Plot(right_av_mu_power);
+            //gnuplot.Plot(right_av_mu_power);
+
+
+            //vec power_vec;
+            //cb_power.peek(power_vec);
+            //mean_power = mean(power_vec);
+            cout<<"mean power: "<<mean_power<<endl;
+            cout<<"mean base: "<<mean_baseline<<endl;
+            cout<<"min base: "<<min_baseline<<endl;
+            cout<<"max base: "<<max_baseline<<endl;
+
+            if (mean_power < mean_baseline)
+                mean_power = (mean_power - mean_baseline) / (min_baseline - mean_baseline) * -115.0; // -315
+            else
+                mean_power = (mean_power - mean_baseline) / (max_baseline - mean_baseline) * 115.0; // 315
+
+            cout<<"mean power: "<<mean_power<<endl;
+
+            redRect.x = 960.0 + mean_power;
+            if (redRect.x > 1870)
+                redRect.x = 1870;
+            else if (redRect.x < 50)
+                redRect.x = 50;
+
+            int target = stateMachine.UpdateState(redRect.x);
+            //cout<<"x: "<<redRect.x<<endl;
+
+            // SDL section
+            DrawGraphics(screen, target, &redRect);
+
+            // write into csv
+            timeval now;
+            long int elapsedTime;
+            gettimeofday(&now, NULL);
+            elapsedTime = (now.tv_sec * 1000000 + now.tv_usec) -  (init_time.tv_sec *1000000 - init_time.tv_usec);
+            double dt = elapsedTime / 1000000.0;
+            csv<<target<<","<<redRect.x<<","<<left_av_mu_power<<","<<right_av_mu_power<<",";
+            // 64 channel + digital in
+            for (int i=0; i<65; i++){
+                csv<<channels[i]<<",";
+            }
+            csv<<dt<<endl;
+
+            csv.flush();
+
         }
-
-        vec power_vec;
-        cb_power.peek(power_vec);
-        float mean_power = mean(power_vec);
-
-        if (mean_power > 2.0)
-            mean_power = 2.0;
-
-        redRect.y = 360 - (2.0-(mean_power))/2.0 * 300.0;
-
-        // SDL section
-        DrawGraphics(screen, gostate, &redRect);
     }
 
     gui.join();
+    SDL_ShowCursor(SDL_ENABLE);
 
     return 0;
 }
