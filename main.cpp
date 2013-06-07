@@ -240,6 +240,9 @@ int main()
             for (size_t i=0; i<left_spd.size(); i++) {
                 message<<left_spd(i)<<",";
             }
+            for (size_t i=0; i<left_spd.size(); i++) {
+                message<<right_spd(i)<<",";
+            }
             message<<endl;
             zmq::message_t zmq_message(message.str().length());
             memcpy((char *) zmq_message.data(), message.str().c_str(), message.str().length());
@@ -250,15 +253,11 @@ int main()
             subscriber.recv(&ball_msg);
             // convert reveived data into c++ string/sstream
             string feat_str(((char *)ball_msg.data()));
-            replace(feat_str.begin(), feat_str.end(), ',', ' ');
             stringstream ss;
             ss.str(feat_str);
             float x=0;
             ss>>x;
-
-
-
-
+            cout<<"Python sent: "<<x<<endl;
 
 
             // compute mean power in mu-alpha band
